@@ -18,57 +18,103 @@ handle_file() {
 	fi
 }
 
+list_currency() {
+	if [ -z "$NAME" ]; then
+		echo "NO user-name" >&2
+		exit 1
+	fi
+
+
+
+		# TODO: Support more files
+		
+		output=""
+		for file in $FILES; do
+
+			if ! [ -f "$file" ]; then
+				echo "LIST_CURRENCY: Wrong file $file" >&2
+				exit 1
+			fi
+
+			if [ -z "$CURRENCIES" ]; then
+				sorted=$(handle_file "$file" | awk -v name="$NAME" -F ";" '{ if ($1 == name && curr[$3] != 1) { print($3); curr[$3] = 1; } }')
+				output="${output}${sorted}\n"
+			else
+				for curr in $CURRENCIES; do
+					sorted=$(handle_file "$file" | awk -v name="$NAME" -v curr="$curr" -F ";" '{ if ($1 == name && $3 == curr && curr_list[$3] != 1) { print($3); curr_list[$3] = 1; } }')
+					output="${output}${sorted}\n"
+				done
+
+			fi
+
+		done
+
+
+		echo "$output" | awk -v name="$NAME" -F ";" 'NF { if ( curr[$1] != 1) { print($1); curr[$1] = 1; } }'
+	}
+
+
 list() {
 	if [ -z "$NAME" ]; then
 		echo "NO user-name" >&2
 		exit 1
 	fi
 
-	for i in "${@}"; do
-		if ! [ -f "$i" ]; then
-			echo "Wrong file" >&2
-			exit 1
+	for i in $FILES; do
+
+	if ! [ -f "$i" ]; then
+		echo "LIST: Wrong file $i" >&2
+		exit 1
+	fi
+
+
+		if [ -z "$CURRENCIES" ]; then
+			for curr in $(list_currency); do
+				handle_file "$i" | awk -v name="$NAME" -v curr="$curr" -v after="$AFTER" -v before="$BEFORE" -F ";" '{
+				if($1 == name && (curr == "" || $3 == curr)) {
+					if((after == "" || $2 > after) && (before == "" || $2 < before)) {
+						print	
+					}
+				}
+			}'
+			done
+		else
+			for curr in $CURRENCIES; do
+				handle_file "$i" | awk -v name="$NAME" -v curr="$curr" -v after="$AFTER" -v before="$BEFORE" -F ";" '{
+				if($1 == name && (curr == "" || $3 == curr)) {
+					if((after == "" || $2 > after) && (before == "" || $2 < before)) {
+						print	
+					}
+				}
+			}'
+			done
+
 		fi
 
-		handle_file "$i" | awk -v name="$NAME" -v curr="$CURRENCY" -v after="$AFTER" -v before="$BEFORE" -F ";" '{
-		if($1 == name && (curr == "" || $3 == curr)) {
-			if((after == "" || $2 > after) && (before == "" || $2 < before)) {
-				print	
-			}
-		}
-	}'
+
 	done
 
-	exit 0
+		exit 0
 	}
 
-	list_currency() {
-		if [ -z "$NAME" ]; then
-			echo "NO user-name" >&2
-			exit 1
-		fi
-
-		# TODO: Support more files
-		handle_file "$1" | awk -v name="$NAME" -F ";" '{ if ($1 == name && curr[$3] != 1) { print($3); curr[$3] = 1; } }' | sort
-	exit 0
-	}
 
 #$3 - Currency, $4 - After, $5 - Before
  status_or_profit() {
-	PROF=$1
-	shift
+	PROFIT_CALL=$1
 
-	if [ -n "$PROF" ] && [ -z "${XTF_PROFIT}" ]; then
+	if [ -n "$PROFIT_CALL" ] && [ -z "${XTF_PROFIT}" ]; then
 		PROFIT=20
 	else
+		# WARNING: CHECK THIS
 		PROFIT="${XTF_PROFIT}"
 	fi
 
 	line=""
 
-	for i in "${@}"; do
-		if ! [ -f "$i" ]; then
-			echo "Wrong file" >&2
+
+	for file in $FILES; do
+		if ! [ -f "$file" ]; then
+			echo "status_or_profit: Wrong file $file" >&2
 			exit 1
 		fi
 
@@ -76,7 +122,7 @@ list() {
 
 	if [ -n "$CURRENCY" ]; then
 		# refactor 
-		output=$(handle_file "$i" | awk -v name="$NAME" -v curr="$CURRENCY" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" '{
+		output=$(handle_file "$file" | awk -v name="$NAME" -v curr="$CURRENCY" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" '{
 		if($1 == name && $3 == curr) {
 			if((after == "" || $2 > after) && (before == "" || $2 < before)) {
 				sum += $4;
@@ -93,8 +139,8 @@ list() {
 
 		tmp="${tmp}${output}\n"
 	else 
-		for j in $(list_currency "$i"); do
-		output=$(handle_file "$i" | awk -v name="$NAME" -v curr="$j" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" '{
+		for j in $(list_currency); do
+		output=$(handle_file "$file" | awk -v name="$NAME" -v curr="$j" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" 'NF {
 		if($1 == name && $3 == curr) {
 			if((after == "" || $2 > after) && (before == "" || $2 < before)) {
 				sum += $4;
@@ -118,7 +164,7 @@ list() {
 	line="${line}${tmp}"
 	done
 
-	echo "$line" | awk -F ':' '{ sum[$1] += $2 } END { for (currency in sum) { if(currency) printf "%s : %.4f\n", currency, sum[currency] } }' | sort
+	echo "$line" | awk -F ':' 'NF > 0 { sum[$1] += $2 } END { for (currency in sum) { if(currency) printf "%s : %.4f\n", currency, sum[currency] } }' | sort
 
 
     exit 0  
@@ -134,6 +180,13 @@ set_argument() {
 			fi
 		fi
 
+		if [ "$1" = "CURRENCY" ]; then
+			if [ "$(echo "$2" | awk '{print length}')" -gt 3 ]; then
+				echo "Invalid currency" >&2
+				exit 1
+			fi
+		fi
+
 		eval "$1=\"$2\""
 	else
 		echo "Wrong $1 argument" >&2
@@ -141,59 +194,103 @@ set_argument() {
 	fi
 }
 
+COMMAND="list"
+COMMAND_SET=""
 
 while [ "$#" -gt 0 ]; do
 	case $1 in
 		-a) 
 			set_argument AFTER "$2"
-			shift
+			shift 2
 			;;
 		-b) 
 			set_argument BEFORE "$2"
-			shift
+			shift 2
 			;;
 		-c) 
 			set_argument CURRENCY "$2"
-			shift
+
+			curr="$2"
+			CURRENCIES="${curr} ${CURRENCIES} "
+			shift 2
 			;;
 		-h|--help) 
 			help
 			exit 0
 			;;
 		list)
-			NAME=$2
-			shift 2
-
-			list "$@"
-
-			# operation list "$2" "$3" 
+			if [ -n "$COMMAND_SET" ]; then
+				echo "Wrong number of commands" >&2
+				exit 1
+			fi
+			COMMAND='list'
+			COMMAND_SET="1"
+			shift
 			;;
 		list-currency)
-			NAME=$2
-			shift 2
-
-			list_currency "$@"
-
-			# operation list_currency "$2" "$3" "$CURRENCY" "$AFTER" "$BEFORE"
+			if [ -n "$COMMAND_SET" ]; then
+				echo "Wrong number of commands" >&2
+				exit 1
+			fi
+			COMMAND='list-currency'
+			COMMAND_SET="1"
+			shift
 			;;
 		status)
-			NAME=$2
-			shift 2
-
-			status_or_profit "" "$@"
+			if [ -n "$COMMAND_SET" ]; then
+				echo "Wrong number of commands" >&2
+				exit 1
+			fi
+			COMMAND='status'
+			COMMAND_SET="1"
+			shift
 			;;
 		profit)
-			NAME=$2
-			shift 2
-
-			status_or_profit "1" "$@"
+			if [ -n "$COMMAND_SET" ]; then
+				echo "Wrong number of commands" >&2
+				exit 1
+			fi
+			COMMAND='profit'
+			COMMAND_SET="1"
+			shift
 			;;
 		*) 
-			NAME=$1
+			if [ -z "$NAME" ]; then
+				NAME="$1"
+			else
+				file="${1}"
+				FILES="${file} ${FILES}"
+			fi
 			shift
-
-			list "$@" 
 			;;
 	esac
-	shift
 done
+
+# echo "CURRENCIES: $CURRENCIES"
+# echo "AFTER: $AFTER"
+# echo "BEFORE: $BEFORE"
+# echo "cmd: $COMMAND"
+# echo "NAME: $NAME"
+# echo "FILES: $FILES"
+
+# FILES=$(echo "$FILES" | awk -F'|' '{for (i=1; i<=NF; i++) if ($i) print $i}')
+
+# echo "$FILES"
+
+# echo "$FILES" | while IFS= read -r file; do
+# if ! [ -f "$file" ]; then
+# 	echo "Wrong file $file" >&2
+# 	exit 1
+# fi
+# done
+
+if [ "$COMMAND" = "list" ]; then
+	list
+elif [ "$COMMAND" = "list-currency" ]; then
+	list_currency | sort
+	exit 0
+elif [ "$COMMAND" = "status" ]; then
+	status_or_profit ""
+elif [ "$COMMAND" = "profit" ]; then
+	status_or_profit "1"
+fi

@@ -338,7 +338,6 @@ fi
 # remove temp test files
 # if you want individual tests comment line with the test you want to keep
 # make sure to later uncomment tho :D
-
 rm cryptoexchange.log
 rm cryptoexchange-2.log.gz
 rm cryptoexchange-1.log
