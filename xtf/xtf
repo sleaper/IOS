@@ -1,0 +1,199 @@
+#!/bin/sh                   
+# xspacpe00 Petr Spac
+# 1.1.2059
+
+export POSIXLY_CORRECT=yes
+export LC_ALL=C             
+
+help () {
+	echo "help TODO"
+}
+
+handle_file() {
+	file="$1"
+	if (file "$file" | grep -q compressed ); then
+		gunzip -ck "$file" 
+	else
+		cat "$file"
+	fi
+}
+
+list() {
+	if [ -z "$NAME" ]; then
+		echo "NO user-name" >&2
+		exit 1
+	fi
+
+	for i in "${@}"; do
+		if ! [ -f "$i" ]; then
+			echo "Wrong file" >&2
+			exit 1
+		fi
+
+		handle_file "$i" | awk -v name="$NAME" -v curr="$CURRENCY" -v after="$AFTER" -v before="$BEFORE" -F ";" '{
+		if($1 == name && (curr == "" || $3 == curr)) {
+			if((after == "" || $2 > after) && (before == "" || $2 < before)) {
+				print	
+			}
+		}
+	}'
+	done
+
+	exit 0
+	}
+
+	list_currency() {
+		if [ -z "$NAME" ]; then
+			echo "NO user-name" >&2
+			exit 1
+		fi
+
+		# TODO: Support more files
+		handle_file "$1" | awk -v name="$NAME" -F ";" '{ if ($1 == name && curr[$3] != 1) { print($3); curr[$3] = 1; } }' | sort
+	exit 0
+	}
+
+#$3 - Currency, $4 - After, $5 - Before
+ status_or_profit() {
+	PROF=$1
+	shift
+
+	if [ -n "$PROF" ] && [ -z "${XTF_PROFIT}" ]; then
+		PROFIT=20
+	else
+		PROFIT="${XTF_PROFIT}"
+	fi
+
+	line=""
+
+	for i in "${@}"; do
+		if ! [ -f "$i" ]; then
+			echo "Wrong file" >&2
+			exit 1
+		fi
+
+	tmp=""
+
+	if [ -n "$CURRENCY" ]; then
+		# refactor 
+		output=$(handle_file "$i" | awk -v name="$NAME" -v curr="$CURRENCY" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" '{
+		if($1 == name && $3 == curr) {
+			if((after == "" || $2 > after) && (before == "" || $2 < before)) {
+				sum += $4;
+			}
+		}
+		}
+		END {
+			if(profit && sum > 0) {
+				printf "%s:%.4f\n", curr, sum + (sum * (profit / 100))
+			} else {
+				printf "%s:%.4f\n", curr, sum
+			}
+		}')
+
+		tmp="${tmp}${output}\n"
+	else 
+		for j in $(list_currency "$i"); do
+		output=$(handle_file "$i" | awk -v name="$NAME" -v curr="$j" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" '{
+		if($1 == name && $3 == curr) {
+			if((after == "" || $2 > after) && (before == "" || $2 < before)) {
+				sum += $4;
+			}
+		}
+		}
+		END {
+			if(sum > 0 || sum < 0) {
+				if(profit && sum > 0) {
+					printf "%s:%.4f\n", curr, sum + (sum * (profit / 100))
+				} else {
+					printf "%s:%.4f\n", curr, sum
+				}
+			}
+		}')
+
+		tmp="${tmp}${output}\n"
+		done
+
+	fi
+	line="${line}${tmp}"
+	done
+
+	echo "$line" | awk -F ':' '{ sum[$1] += $2 } END { for (currency in sum) { if(currency) printf "%s : %.4f\n", currency, sum[currency] } }' | sort
+
+
+    exit 0  
+}
+
+set_argument() {
+	REGEX_DATE='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}'
+	if [ -n "$2" ]; then
+		if [ "$1" = "AFTER" ] || [ "$1" = "BEFORE" ]; then
+			if ! echo "$2" | grep -Eq "$REGEX_DATE"; then
+				echo "Wrong date format" >&2
+				exit 1
+			fi
+		fi
+
+		eval "$1=\"$2\""
+	else
+		echo "Wrong $1 argument" >&2
+		exit 1
+	fi
+}
+
+
+while [ "$#" -gt 0 ]; do
+	case $1 in
+		-a) 
+			set_argument AFTER "$2"
+			shift
+			;;
+		-b) 
+			set_argument BEFORE "$2"
+			shift
+			;;
+		-c) 
+			set_argument CURRENCY "$2"
+			shift
+			;;
+		-h|--help) 
+			help
+			exit 0
+			;;
+		list)
+			NAME=$2
+			shift 2
+
+			list "$@"
+
+			# operation list "$2" "$3" 
+			;;
+		list-currency)
+			NAME=$2
+			shift 2
+
+			list_currency "$@"
+
+			# operation list_currency "$2" "$3" "$CURRENCY" "$AFTER" "$BEFORE"
+			;;
+		status)
+			NAME=$2
+			shift 2
+
+			status_or_profit "" "$@"
+			;;
+		profit)
+			NAME=$2
+			shift 2
+
+			status_or_profit "1" "$@"
+			;;
+		*) 
+			NAME=$1
+			shift
+
+			list "$@" 
+			;;
+	esac
+	shift
+done
