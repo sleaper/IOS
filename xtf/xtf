@@ -27,11 +27,6 @@ list_currency() {
     output=""
     for file in $FILES; do
 
-        if ! [ -f "$file" ]; then
-            echo "LIST_CURRENCY: Wrong file $file" >&2
-            exit 1
-        fi
-
         if [ -z "$CURRENCIES" ]; then
             sorted=$(handle_file "$file" | awk -v name="$NAME" -F ";" '{ if ($1 == name && curr[$3] != 1) { print($3); curr[$3] = 1; } }')
             output="${output}${sorted}\n"
@@ -40,9 +35,7 @@ list_currency() {
                 sorted=$(handle_file "$file" | awk -v name="$NAME" -v curr="$curr" -F ";" '{ if ($1 == name && $3 == curr && curr_list[$3] != 1) { print($3); curr_list[$3] = 1; } }')
                 output="${output}${sorted}\n"
             done
-
         fi
-
     done
 
 
@@ -57,12 +50,6 @@ list() {
     fi
 
     for i in $FILES; do
-
-        if ! [ -f "$i" ]; then
-            echo "LIST: Wrong file $i" >&2
-            exit 1
-        fi
-
 
         if [ -z "$CURRENCIES" ]; then
             for curr in $(list_currency); do
@@ -84,10 +71,7 @@ list() {
 				}
                 }'
             done
-
         fi
-
-
     done
 
 }
@@ -108,10 +92,6 @@ status_or_profit() {
 
 
     for file in $FILES; do
-        if ! [ -f "$file" ]; then
-            echo "status_or_profit: Wrong file $file" >&2
-            exit 1
-        fi
 
         tmp=""
 
@@ -262,6 +242,13 @@ done
 # echo "FILES: $FILES"
 
 # FILES=$(echo "$FILES" | awk -F'|' '{for (i=1; i<=NF; i++) if ($i) print $i}')
+
+for file in $FILES; do
+    if ! [ -f "$file" ]; then
+        echo "Wrong file $file" >&2
+        exit 1
+    fi
+done
 
 if [ "$COMMAND" = "list" ]; then
     list
