@@ -21,8 +21,6 @@ NORMAL='\033[0m'
 test_count=0
 correct=0
 
-# compile maze.c just in case
-
 rm -rf diff
 
 run_test() {
@@ -324,7 +322,10 @@ run_test "" "${args[@]}"
 args=("list" "-c" "AB" "Trader1" "cryptoexchange.log")
 run_test "" "${args[@]}"
 
-
+# status profit more currencies
+args=("-c" "EUR" "-c" "USD" "-b" "2024-01-21 15:29:29" "status" "Trader1" "cryptoexchange.log")
+run_test "EUR : -2000.0000
+USD : -3000.0000" "${args[@]}"
 
 
 
@@ -338,6 +339,7 @@ fi
 # remove temp test files
 # if you want individual tests comment line with the test you want to keep
 # make sure to later uncomment tho :D
+
 rm cryptoexchange.log
 rm cryptoexchange-2.log.gz
 rm cryptoexchange-1.log
