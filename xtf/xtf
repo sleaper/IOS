@@ -5,6 +5,9 @@
 export POSIXLY_CORRECT=yes
 export LC_ALL=C
 
+nl='
+'
+
 help () {
     echo "help TODO"
 }
@@ -12,7 +15,7 @@ help () {
 handle_file() {
     file="$1"
     if (file "$file" | grep -q compressed ); then
-        gunzip -ck "$file"
+        gunzip -c "$file"
     else
         cat "$file"
     fi
@@ -26,179 +29,187 @@ list_currency() {
 
     if [ -z "$CURRENCIES" ]; then
         list_curr_tmp=$(handle_file "$1" | awk -v name="$NAME" -F ";" '{ if ($1 == name && curr[$3] != 1) { print($3); curr[$3] = 1; } }')
-        list_curr_output="${list_curr_output}${list_curr_tmp}\n"
+        list_curr_output="${list_curr_output}${list_curr_tmp}$nl"
     else
         for curr in $CURRENCIES; do
             list_curr_tmp=$(handle_file "$1" | awk -v name="$NAME" -v curr="$curr" -F ";" '{ if ($1 == name && $3 == curr && curr_list[$3] != 1) { print($3); curr_list[$3] = 1; } }')
-            list_curr_output="${list_curr_output}${list_curr_tmp}\n"
+            list_curr_output="${list_curr_output}${list_curr_tmp}$nl"
         done
-    fi
-}
+            fi
+        }
 
 
-list() {
-    if [ -z "$NAME" ]; then
-        echo "list: No user-name" >&2
-        exit 1
-    fi
+        list() {
+            if [ -z "$NAME" ]; then
+                echo "list: No user-name" >&2
+                exit 1
+            fi
 
-    list_currency "$1"
-    list_tmp=$(echo "$list_curr_output" | awk -v name="$NAME" -F ";" 'NF { if ( curr[$1] != 1) { print($1); curr[$1] = 1; } }')
+            list_currency "$1"
+            list_tmp=$(echo "$list_curr_output" | awk -v name="$NAME" -F ";" 'NF { if ( curr[$1] != 1) { print($1); curr[$1] = 1; } }')
 
-    for curr in $list_tmp; do
-        handle_file "$1" | awk -v name="$NAME" -v curr="$curr" -v after="$AFTER" -v before="$BEFORE" -F ";" '{
-				if($1 == name && (curr == "" || $3 == curr)) {
-					if((after == "" || $2 > after) && (before == "" || $2 < before)) {
-						print
-					}
-				}
-        }'
-    done
+            for curr in $list_tmp; do
+handle_file "$1" | awk -v name="$NAME" -v curr="$curr" -v after="$AFTER" -v before="$BEFORE" -F ";" '{
+    if($1 == name && (curr == "" || $3 == curr)) {
+        if((after == "" || $2 > after) && (before == "" || $2 < before)) {
+            print
+        }
+    }
+}'
+done
+
 }
 
 
 #$3 - Currency, $4 - After, $5 - Before
 status_or_profit() {
-    PROFIT_CALL=$1
+PROFIT_CALL=$1
 
-    if [ -n "$PROFIT_CALL" ] && [ -z "${XTF_PROFIT}" ]; then
-        PROFIT=20
-    else
-        # WARNING: CHECK THIS
-        PROFIT="${XTF_PROFIT}"
-    fi
+if [ -n "$PROFIT_CALL" ] && [ -z "${XTF_PROFIT}" ]; then
+PROFIT=20
+else
+# WARNING: CHECK THIS
+PROFIT="${XTF_PROFIT}"
+fi
 
-    list_currency "$2"
-    what=$(echo "$list_curr_output" | awk -v name="$NAME" -F ";" 'NF { if ( curr[$1] != 1) { print($1); curr[$1] = 1; } }')
+list_currency "$2"
+what=$(echo "$list_curr_output" | awk -v name="$NAME" -F ";" 'NF { if ( curr[$1] != 1) { print($1); curr[$1] = 1; } }')
 
 
-    for j in $what; do
-        stat_or_prof_tmp=$(handle_file "$2" | awk -v name="$NAME" -v curr="$j" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" 'NF {
-		if($1 == name && $3 == curr) {
-			if((after == "" || $2 > after) && (before == "" || $2 < before)) {
-				sum += $4;
-			}
-		}
-		}
-		END {
-			if(sum > 0 || sum < 0) {
-				if(profit && sum > 0) {
-					printf "%s:%.4f\n", curr, sum + (sum * (profit / 100))
-				} else {
-					printf "%s:%.4f\n", curr, sum
-				}
-			}
-        }')
+for curr in $what; do
+stat_or_prof_tmp=$(handle_file "$2" | awk -v name="$NAME" -v curr="$curr" -v after="$AFTER" -v before="$BEFORE" -v profit="$PROFIT" -F ";" 'NF {
+        if($1 == name && $3 == curr) {
+            if((after == "" || $2 > after) && (before == "" || $2 < before)) {
+                sum += $4;
+            }
+        }
+    }
+END {
+if(sum > 0 || sum < 0) {
+    if(profit && sum > 0) {
+        printf "%s:%.4f\n", curr, sum + (sum * (profit / 100))
+    } else {
+    printf "%s:%.4f\n", curr, sum
+}
+}
+}')
 
-        stat_or_prof_out="${stat_or_prof_out}${stat_or_prof_tmp}\n"
-    done
+stat_or_prof_out="${stat_or_prof_out}${stat_or_prof_tmp}$nl"
+done
 }
 
 set_argument() {
-    REGEX_DATE='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}'
-    if [ -n "$2" ]; then
-        if [ "$1" = "AFTER" ] || [ "$1" = "BEFORE" ]; then
-            if ! echo "$2" | grep -Eq "$REGEX_DATE"; then
-                echo "Wrong date format" >&2
-                exit 1
-            else
-                if ! date -d "$2" > /dev/null 2>&1; then
-                    echo "Invalid date" >&2
-                    exit 1
-                fi
-            fi
-        fi
-
-        eval "$1=\"$2\""
-    else
-        echo "Wrong $1 argument" >&2
+REGEX_DATE='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}'
+if [ -n "$2" ]; then
+if [ "$1" = "AFTER" ] || [ "$1" = "BEFORE" ]; then
+    if ! echo "$2" | grep -Eq "$REGEX_DATE"; then
+        echo "Wrong date format" >&2
         exit 1
+    else
+        if ! date -d "$2" > /dev/null 2>&1; then
+            # If GNU date fails, try BSD date
+            # if ! date -j -f "%Y-%m-%d %H:%M:%S" "$2" > /dev/null 2>&1; then
+            #     echo "Invalid date" >&2
+            #     exit 1
+            # fi
+            echo 1
+
+        fi
     fi
+fi
+
+
+
+eval "$1=\"$2\""
+else
+echo "Wrong $1 argument" >&2
+exit 1
+fi
 }
 
 check_command() {
-    if [ -n "$COMMAND_SET" ]; then
-        echo "Wrong number of commands" >&2
-        exit 1
-    fi
+if [ -n "$COMMAND_SET" ]; then
+echo "Wrong number of commands" >&2
+exit 1
+fi
 }
 
 COMMAND="list"
 
 while [ "$#" -gt 0 ]; do
-    case $1 in
-        -a)
-            set_argument AFTER "$2"
-            shift 2
-            ;;
-        -b)
-            set_argument BEFORE "$2"
-            shift 2
-            ;;
-        -c)
-            if [ "$(echo "$2" | awk '{print length}')" -gt 3 ]; then
-                echo "Invalid currency $2" >&2
+case $1 in
+-a)
+    set_argument AFTER "$2"
+    shift 2
+    ;;
+-b)
+    set_argument BEFORE "$2"
+    shift 2
+    ;;
+-c)
+    if [ "$(echo "$2" | awk '{print length}')" -gt 3 ]; then
+        echo "Invalid currency $2" >&2
+        exit 1
+    fi
+
+    curr="$2"
+    CURRENCIES="${curr} ${CURRENCIES}"
+    shift 2
+    ;;
+-h|--help)
+    help
+    exit 0
+    ;;
+list)
+    check_command
+    COMMAND='list'
+    COMMAND_SET="1"
+    shift
+    ;;
+list-currency)
+    check_command
+    COMMAND='list-currency'
+    COMMAND_SET="1"
+    shift
+    ;;
+status)
+    check_command
+    COMMAND='status'
+    COMMAND_SET="1"
+    shift
+    ;;
+profit)
+    check_command
+    COMMAND='profit'
+    COMMAND_SET="1"
+    shift
+    ;;
+*)
+    if [ -z "$NAME" ]; then
+        NAME="$1"
+    else
+
+        for file in "$@"; do
+            if ! [ -f "$file" ]; then
+                echo "Wrong file $file" >&2
                 exit 1
             fi
-
-            curr="$2"
-            CURRENCIES="${curr} ${CURRENCIES}"
-            shift 2
-            ;;
-        -h|--help)
-            help
-            exit 0
-            ;;
-        list)
-            check_command
-            COMMAND='list'
-            COMMAND_SET="1"
-            shift
-            ;;
-        list-currency)
-            check_command
-            COMMAND='list-currency'
-            COMMAND_SET="1"
-            shift
-            ;;
-        status)
-            check_command
-            COMMAND='status'
-            COMMAND_SET="1"
-            shift
-            ;;
-        profit)
-            check_command
-            COMMAND='profit'
-            COMMAND_SET="1"
-            shift
-            ;;
-        *)
-            if [ -z "$NAME" ]; then
-                NAME="$1"
-            else
-
-                for file in "$@"; do
-                    if ! [ -f "$file" ]; then
-                        echo "Wrong file $file" >&2
-                        exit 1
-                    fi
-                done
+        done
 
 
-                if [ "$COMMAND" = "list" ]; then
-                    list "$1" | sort -t ";" -nk2
-                elif [ "$COMMAND" = "list-currency" ]; then
-                    list_currency "$1"
-                elif [ "$COMMAND" = "status" ]; then
-                    status_or_profit "" "$1"
-                elif [ "$COMMAND" = "profit" ]; then
-                    status_or_profit "1" "$1"
-                fi
-            fi
-            shift
-            ;;
-    esac
+        if [ "$COMMAND" = "list" ]; then
+            list "$1" | sort -t ";" -nk2
+        elif [ "$COMMAND" = "list-currency" ]; then
+            list_currency "$1"
+        elif [ "$COMMAND" = "status" ]; then
+            status_or_profit "" "$1"
+        elif [ "$COMMAND" = "profit" ]; then
+            status_or_profit "1" "$1"
+        fi
+    fi
+    shift
+    ;;
+esac
 done
 
 
@@ -209,16 +220,16 @@ done
 # echo "NAME: $NAME"
 
 case $COMMAND in
-    list)
-        exit 0
-        ;;
-    list-currency)
-        echo "$list_curr_output" | awk -F ";" 'NF { if ( curr[$1] != 1) { print($1); curr[$1] = 1; } }' | sort
-        exit 0
-        ;;
-    status|profit)
-        echo "$stat_or_prof_out" | awk -F ':' 'NF > 0 { sum[$1] += $2 } END { for (currency in sum) { if(currency) printf "%s : %.4f\n", currency, sum[currency] } }' | sort
-        exit 0
-        ;;
+list)
+exit 0
+;;
+list-currency)
+echo "$list_curr_output" | awk -F ";" 'NF { if ( curr[$1] != 1) { print($1); curr[$1] = 1; } }' | sort
+exit 0
+;;
+status|profit)
+echo "$stat_or_prof_out" | awk -F ':' 'NF > 0 { sum[$1] += $2 } END { for (currency in sum) { if(currency) printf "%s : %.4f\n", currency, sum[currency] } }' | sort
+exit 0
+;;
 esac
 
