@@ -1,6 +1,6 @@
 #!/bin/sh
 # xspacpe00 Petr Spac
-# 1.1.2059
+# 27.2.2024
 
 export POSIXLY_CORRECT=yes
 export LC_ALL=C
@@ -8,8 +8,28 @@ export LC_ALL=C
 nl='
 '
 
-help() {
-    echo "help TODO"
+REGEX_DATE='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}'
+
+show_help() { 
+    echo "Skript pro předzpracování logů z Vaší kryptoměnové burzy."
+    echo
+    echo "Pouziti: $0 [-h|--help] [FILTR] [PŘÍKAZ] UŽIVATEL LOG [LOG2 [...]"
+    echo
+    echo "-h a --help vypíšou nápovědu s krátkým popisem každého příkazu a přepínače."
+    echo
+    echo "FILTR může být kombinace následujících:"
+    echo "-a DATETIME – after: jsou uvažovány pouze záznamy PO tomto datu a čase (bez něj). DATETIME je formátu YYYY-MM-DD HH:MM:SS"
+    echo "-b DATETIME – before: jsou uvažovány pouze záznamy PŘED tímto datem a časem (bez něj)"
+    echo "-c CURRENCY – jsou uvažovány pouze záznamy odpovídající dané měně"
+    echo "-h a --help vypíšou nápovědu s krátkým popisem každého příkazu a přepínače"
+    echo
+    echo "PŘÍKAZ může být jeden z:"
+    echo "list          – výpis záznamů pro daného uživatele"
+    echo "list-currency – výpis seřazeného seznamu vyskytujících se měn"
+    echo "status        – výpis skutečného stavu účtu seskupeného a seřazeného dle jednotlivých měn"
+    echo "profit        – výpis stavu účtu zákazníka se započítaným fiktivním výnosem"
+    echo
+    echo "LOG, LOG2 ... jsou vstupni soubory ve formatu CSV"
 }
 
 handle_file() {
@@ -96,7 +116,6 @@ if(sum > 0 || sum < 0) {
 }
 
 set_argument() {
-    REGEX_DATE='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}'
     if [ -n "$2" ]; then
         if [ "$1" = "AFTER" ] || [ "$1" = "BEFORE" ]; then
             if ! echo "$2" | grep -Eq "$REGEX_DATE"; then
@@ -126,17 +145,36 @@ check_command() {
     fi
 }
 
+file_format_check() {
+    check=$(handle_file "$1" | awk 'BEGIN{FS=OFS=";"} f{skip} NF!=4||!length($1)||!length($2)||!length($3)||!length($4){f=1} END{if (f) {print "File contains malformed lines"}}')
+
+    if [ -n "$check" ]; then
+        echo "$check" >&2
+        exit 1
+    fi
+}
+
 COMMAND="list"
 
 while [ "$#" -gt 0 ]; do
     case $1 in
     -a)
-        set_argument AFTER "$2"
-        shift 2
+        if [ -z "$AFTER" ]; then
+            set_argument AFTER "$2"
+            shift 2
+        else
+            echo "Invalid number of -a flags" >&2
+            exit 1
+        fi
         ;;
     -b)
-        set_argument BEFORE "$2"
-        shift 2
+        if [ -z "$BEFORE" ]; then
+            set_argument BEFORE "$2"
+            shift 2
+        else
+            echo "Invalid number of -b flags" >&2
+            exit 1
+        fi
         ;;
     -c)
         if [ "$(echo "$2" | awk '{print length}')" -gt 3 ]; then
@@ -149,7 +187,7 @@ while [ "$#" -gt 0 ]; do
         shift 2
         ;;
     -h | --help)
-        help
+        show_help
         exit 0
         ;;
     list)
@@ -186,6 +224,11 @@ while [ "$#" -gt 0 ]; do
                     echo "Wrong file $file" >&2
                     exit 1
                 fi
+
+            # CHECK HERE FILE VALIDITY
+            file_format_check "$file"
+
+
             done
 
             if [ "$COMMAND" = "list" ]; then
@@ -202,12 +245,6 @@ while [ "$#" -gt 0 ]; do
         ;;
     esac
 done
-
-# echo "CURRENCIES: $CURRENCIES"
-# echo "AFTER: $AFTER"
-# echo "BEFORE: $BEFORE"
-# echo "cmd: $COMMAND"
-# echo "NAME: $NAME"
 
 case $COMMAND in
 list)
