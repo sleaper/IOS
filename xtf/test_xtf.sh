@@ -47,10 +47,7 @@ NORMAL='\033[0m'
 test_count=0
 correct=0
 
-# compile maze.c just in case
-
 rm -rf diff
-
 
 
 run_test() {
@@ -376,7 +373,7 @@ args=("list" "Trader1" "invalid_date.log")
 run_test "" "${args[@]}"
 
 # 40 missing name in second entry
-echo -e "Trader1;2024-01-1515:30:42;EUR;-2000.0000\n;2024-01-15 15:31:12;BTC;-9.8734\nTrader1;2024-01-16 18:06:32;USD;-3000.0000\nCryptoWiz;2024-01-17 08:58:09;CZK;10000.0000\nTrader1;2024-01-20 11:43:02;ETH;1.9417\nTrader1;2024-01-22 09:17:40;ETH;10.9537" > missing_name.log
+echo -e "Trader1;2024-01-15 15:30:42;EUR;-2000.0000\n;2024-01-15 15:31:12;BTC;-9.8734\nTrader1;2024-01-16 18:06:32;USD;-3000.0000\nCryptoWiz;2024-01-17 08:58:09;CZK;10000.0000\nTrader1;2024-01-20 11:43:02;ETH;1.9417\nTrader1;2024-01-22 09:17:40;ETH;10.9537" > missing_name.log
 args=("list" "Trader1" "missing_name.log")
 run_test "" "${args[@]}"
 
@@ -388,6 +385,10 @@ run_test "" "${args[@]}"
 # 42 missing value in second entry
 echo -e "Trader1;2024-01-15 15:30:42;EUR;-2000.0000\nTrader2;2024-01-15 15:31:12;BTC;\nTrader1;2024-01-16 18:06:32;USD;-3000.0000\nCryptoWiz;2024-01-17 08:58:09;CZK;10000.0000\nTrader1;2024-01-20 11:43:02;ETH;1.9417\nTrader1;2024-01-22 09:17:40;ETH;10.9537" > missing_value.log
 args=("list" "Trader1" "missing_value.log")
+run_test "" "${args[@]}"
+
+# 43 invalid currency code
+args=("-c" "ab1" "Trader1" "cryptoexchange.log")
 run_test "" "${args[@]}"
 
 
@@ -402,11 +403,11 @@ fi
 # if you want individual tests comment line with the test you want to keep
 # make sure to later uncomment tho :D
 
-# rm cryptoexchange.log
-# rm cryptoexchange-2.log.gz
-# rm cryptoexchange-1.log
-# rm "crypto exchange.log"
-# rm "crypto exchange.log.gz"
+rm cryptoexchange.log
+rm cryptoexchange-2.log.gz
+rm cryptoexchange-1.log
+rm "crypto exchange.log"
+rm "crypto exchange.log.gz"
 rm "invalid_date.log"
 rm "missing_name.log"
 rm "missing_currency.log"

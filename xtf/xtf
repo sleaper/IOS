@@ -1,6 +1,6 @@
 #!/bin/sh
 # xspacpe00 Petr Spac
-# 27.2.2024
+# 15.3.2024
 
 export POSIXLY_CORRECT=yes
 export LC_ALL=C
@@ -146,7 +146,21 @@ check_command() {
 }
 
 file_format_check() {
-    check=$(handle_file "$1" | awk 'BEGIN{FS=OFS=";"} f{skip} NF!=4||!length($1)||!length($2)||!length($3)||!length($4){f=1} END{if (f) {print "File contains malformed lines"}}')
+    check=$(handle_file "$1" | awk -F';' '{
+        if (NF!=4 || !length($1) || !length($2) || !length($3) || !length($4) || ($4+0 != $4)) {
+            print "File contains invalid data"; exit 1
+        }
+        
+        split($2, dateTime, " ");
+        split(dateTime[1], dateParts, "-");
+        split(dateTime[2], timeParts, ":");
+        
+        timeStr = dateParts[1] " " dateParts[2] " " dateParts[3] " " timeParts[1] " " timeParts[2] " " timeParts[3];
+        
+        if (mktime(timeStr) == -1) {
+            print "Invalid date"; exit 1
+        }
+    }')
 
     if [ -n "$check" ]; then
         echo "$check" >&2
