@@ -218,13 +218,13 @@ void process_bus(int stops_count, int tb, int bus_cap) {
     sem_post(final_stop);
     sem_wait(get_of);
   }
-  nice_print("BUS: leaving final");
+  nice_print("BUS: leaving final\n");
 
   if (*waiting > 0) {
     process_bus(stops_count, tb, bus_cap);
   }
 
-  nice_print("BUS: finish");
+  nice_print("BUS: finish\n");
   exit(0);
 }
 
@@ -245,6 +245,12 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
       (*riders)++;
       is_rider = true;
       nice_print("L %d: boarding\n", skier_id);
+    } else {
+      sem_post(boarded);
+
+      sem_wait(mutex_waiting);
+      *waiting += 1;
+      sem_post(mutex_waiting);
     }
   }
 
@@ -258,7 +264,7 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
 
   sem_post(get_of);
 
-  nice_print("L %d: going to ski", skier_id);
+  nice_print("L %d: going to ski\n", skier_id);
 }
 
 int main(int argc, char *argv[]) {
