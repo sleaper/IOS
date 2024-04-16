@@ -1,6 +1,6 @@
 #include "proj2.h"
 #include <ctype.h>
-#include <fcntl.h> /* For O_* constants */
+#include <fcntl.h>
 #include <semaphore.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <sys/stat.h> /* For mode constants */
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -52,14 +52,6 @@ sem_t *get_of;
 sem_t *final_stop;
 
 int semaphore_init(void) {
-  sem_unlink(BUS_FNAME);
-  sem_unlink(MUTEX_FNAME);
-  sem_unlink(BOARDED_FNAME);
-  sem_unlink(PRINT_FNAME);
-  sem_unlink(GETOF_FNAME);
-  sem_unlink(FINAL_FNAME);
-  sem_unlink(RIDERS_FNAME);
-
   bus = sem_open(BUS_FNAME, O_CREAT, 0666, 0);
   if (bus == SEM_FAILED) {
     perror("sem_open/bus");
@@ -168,19 +160,20 @@ void nice_print(const char *format, ...) {
 }
 
 void semaphore_clean(void) {
-  printf("cleaning\n");
+  fclose(oFile);
+
   sem_close(bus);
+  sem_close(print);
   sem_close(boarded);
   sem_close(mutex_waiting);
-  sem_close(print);
   sem_close(get_of);
   sem_close(final_stop);
   sem_close(mutex_riders);
 
   sem_unlink(BUS_FNAME);
   sem_unlink(PRINT_FNAME);
-  sem_unlink(MUTEX_FNAME);
   sem_unlink(BOARDED_FNAME);
+  sem_unlink(MUTEX_FNAME);
   sem_unlink(GETOF_FNAME);
   sem_unlink(FINAL_FNAME);
   sem_unlink(RIDERS_FNAME);
@@ -219,7 +212,7 @@ void process_bus(int stops_count, int tb, int bus_cap, int skier_count) {
     (*curr_stop)++;
   }
 
-  usleep(random_range(0, tb)); // Driving to final stop
+  usleep(random_range(0, tb));
 
   sem_wait(mutex_riders);
   int tmp = *riders;
@@ -297,12 +290,11 @@ int main(int argc, char *argv[]) {
     int arg = is_number(argv[i]);
     if (arg == -1) {
       fprintf(stderr, "Invalid args format\n");
-      exit(1);
+      return 1;
     }
 
     switch (i) {
     case 1:
-      // TODO: Maybe add lower bound?
       if (arg <= 0 || arg >= 20000) {
         fprintf(stderr, "Invalid skiers count\n");
         exit(1);
@@ -313,7 +305,7 @@ int main(int argc, char *argv[]) {
     case 2:
       if (0 >= arg || arg > 10) {
         fprintf(stderr, "Invalid stops count\n");
-        exit(1);
+        return 1;
       }
 
       stops_count = arg;
@@ -321,7 +313,7 @@ int main(int argc, char *argv[]) {
     case 3:
       if (arg < 10 || arg > 100) {
         fprintf(stderr, "Invalid bus capacity\n");
-        exit(1);
+        return 1;
       }
 
       bus_capacity = arg;
@@ -330,7 +322,7 @@ int main(int argc, char *argv[]) {
     case 4:
       if (0 > arg || arg > 10000) {
         fprintf(stderr, "Invalid TL\n");
-        exit(1);
+        return 1;
       }
 
       skier_wait_time = arg;
@@ -338,7 +330,7 @@ int main(int argc, char *argv[]) {
     case 5:
       if (0 > arg || arg > 1000) {
         fprintf(stderr, "Invalid TB\n");
-        exit(1);
+        return 1;
       }
 
       bus_ride_time = arg;
@@ -351,13 +343,13 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Random numbers
+  // NOTE: Random numbers
   srand(getpid());
 
   printf("forkis\n");
   pid_t bus = fork();
   if (bus == 0) {
-    // child
+    // NOTE: child
     process_bus(stops_count, bus_ride_time, bus_capacity, skiers_count);
   } else if (bus < 0) {
     semaphore_clean();
@@ -373,8 +365,7 @@ int main(int argc, char *argv[]) {
     int stop_id = random_range(1, stops_count);
 
     if (skier == 0) {
-      printf("pid: %d i:%d stop_id: %d\n", getpid(), i, stop_id);
-      // child
+      // NOTE: child
       process_skier(i, stop_id, skier_wait_time, bus_capacity);
     } else if (skier < 0) {
       semaphore_clean();
