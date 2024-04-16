@@ -40,8 +40,7 @@ int *waiting;
 int *line;
 int *curr_stop;
 int *riders;
-int *coming; // TODO: Create init for this. Stores how many skiers are still
-             // comming
+int *coming;
 
 // Semaphores
 sem_t *mutex_waiting;
@@ -59,6 +58,7 @@ int semaphore_init(void) {
   sem_unlink(PRINT_FNAME);
   sem_unlink(GETOF_FNAME);
   sem_unlink(FINAL_FNAME);
+  sem_unlink(RIDERS_FNAME);
 
   bus = sem_open(BUS_FNAME, O_CREAT, 0666, 0);
   if (bus == SEM_FAILED) {
@@ -73,7 +73,7 @@ int semaphore_init(void) {
   }
 
   mutex_riders = sem_open(RIDERS_FNAME, O_CREAT, 0666, 1);
-  if (mutex_waiting == SEM_FAILED) {
+  if (mutex_riders == SEM_FAILED) {
     perror("sem_open/mutex_riders");
     return 1;
   }
@@ -193,7 +193,7 @@ void semaphore_clean(void) {
 }
 
 void process_bus(int stops_count, int tb, int bus_cap, int skier_count) {
-  nice_print("BUS: started (remaining: %d)\n", *coming);
+  nice_print("BUS: started\n");
 
   *curr_stop = 1;
 
@@ -201,6 +201,7 @@ void process_bus(int stops_count, int tb, int bus_cap, int skier_count) {
     usleep(random_range(0, tb)); // Driving to stop
     nice_print("BUS: arrived to %d\n", *curr_stop);
 
+    // Let skiers board
     sem_wait(mutex_waiting);
     int n = min(*waiting, bus_cap);
 
@@ -214,29 +215,30 @@ void process_bus(int stops_count, int tb, int bus_cap, int skier_count) {
 
     nice_print("BUS: leaving %d\n", *curr_stop);
 
-    // Depart
+    // Depart to the next stop
     (*curr_stop)++;
   }
 
   usleep(random_range(0, tb)); // Driving to final stop
 
-  nice_print("BUS: arrived to final RIDERS: %d\n", *riders);
-  for (int i = 1; i <= *riders; i++) {
-    nice_print("test1 %d\n", i);
+  sem_wait(mutex_riders);
+  int tmp = *riders;
+  sem_post(mutex_riders);
+
+  nice_print("BUS: arrived to final\n");
+  for (int i = 1; i <= tmp; i++) {
     sem_post(final_stop);
-    nice_print("INCREMENTING FINAL STOP i:%d\n", i);
     sem_wait(get_of);
-    nice_print("test2 %d\n", i);
-    nice_print("next %d\n", i);
   }
   nice_print("BUS: leaving final\n");
 
   if (*waiting > 0 || *coming > 0) {
+    // If there are still waiting skiers or coming skiers, restart the bus loop
     process_bus(stops_count, tb, bus_cap, skier_count);
+  } else {
+    nice_print("BUS: finish\n");
+    exit(0);
   }
-
-  nice_print("BUS: finish\n");
-  exit(0);
 }
 
 void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
@@ -244,41 +246,37 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
 
   usleep(random_range(0, tl)); // Breakfast
   *coming -= 1;
-  printf("coming: %d\n", *coming);
 
   nice_print("L %d: arrived to %d\n", skier_id, stop_id);
   sem_wait(mutex_waiting);
   *waiting += 1;
   sem_post(mutex_waiting);
 
-  bool is_rider = false;
-  while (!is_rider) {
+  bool has_boarded = false;
+  while (!has_boarded) {
     sem_wait(bus);
-    // Board
-    if (*curr_stop == stop_id && *riders < bus_cap) {
-      sem_wait(mutex_riders);
-      (*riders)++;
-      sem_post(mutex_riders);
-      is_rider = true;
-      nice_print("L %d: boarding\n", skier_id);
-    } else {
-      sem_post(boarded); // TODO: Maybe remove?
 
+    // Check if the skier is at the correct stop and the bus is not full
+    sem_wait(mutex_riders);
+    if (*curr_stop == stop_id && *riders < bus_cap) {
+      nice_print("L %d: boarding\n", skier_id);
+      (*riders)++;
+      has_boarded = true;
+    }
+    sem_post(mutex_riders);
+
+    sem_post(boarded);
+
+    if (!has_boarded) {
       sem_wait(mutex_waiting);
-      *waiting += 1;
+      (*waiting)++;
       sem_post(mutex_waiting);
     }
   }
 
-  sem_post(boarded);
-
-  nice_print("L %d: Waiting on final stop\n", skier_id);
   sem_wait(final_stop);
-  nice_print("L %d: At final stop!\n", skier_id);
 
-  nice_print("L %d: waiting for rider mutex!\n", skier_id);
   sem_wait(mutex_riders);
-  nice_print("L %d: can change mutex!\n", skier_id);
   (*riders)--;
   sem_post(mutex_riders);
 
