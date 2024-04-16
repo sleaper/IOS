@@ -40,6 +40,8 @@ int *waiting;
 int *line;
 int *curr_stop;
 int *riders;
+int *coming; // TODO: Create init for this. Stores how many skiers are still
+             // comming
 
 // Semaphores
 sem_t *mutex_waiting;
@@ -50,7 +52,7 @@ sem_t *print;
 sem_t *get_of;
 sem_t *final_stop;
 
-int semaphore_init() {
+int semaphore_init(void) {
   sem_unlink(BUS_FNAME);
   sem_unlink(MUTEX_FNAME);
   sem_unlink(BOARDED_FNAME);
@@ -138,6 +140,14 @@ int semaphore_init() {
   }
   *riders = 0;
 
+  coming = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
+                MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+  if (coming == MAP_FAILED) {
+    perror("mmap/comming");
+    return 1;
+  }
+  *coming = 0;
+
   return 0;
 }
 
@@ -157,7 +167,7 @@ void nice_print(const char *format, ...) {
   sem_post(print);
 }
 
-void semaphore_clean() {
+void semaphore_clean(void) {
   printf("cleaning\n");
   sem_close(bus);
   sem_close(boarded);
@@ -179,14 +189,15 @@ void semaphore_clean() {
   munmap(line, sizeof(int));
   munmap(curr_stop, sizeof(int));
   munmap(riders, sizeof(int));
+  munmap(coming, sizeof(int));
 }
 
-void process_bus(int stops_count, int tb, int bus_cap) {
-  nice_print("BUS: started\n");
+void process_bus(int stops_count, int tb, int bus_cap, int skier_count) {
+  nice_print("BUS: started (remaining: %d)\n", *coming);
 
   *curr_stop = 1;
 
-  while (*curr_stop < stops_count) {
+  while (*curr_stop <= stops_count) {
     usleep(random_range(0, tb)); // Driving to stop
     nice_print("BUS: arrived to %d\n", *curr_stop);
 
@@ -204,24 +215,24 @@ void process_bus(int stops_count, int tb, int bus_cap) {
     nice_print("BUS: leaving %d\n", *curr_stop);
 
     // Depart
-    if (*curr_stop < stops_count) {
-      (*curr_stop)++;
-    } else {
-      break;
-    }
+    (*curr_stop)++;
   }
 
   usleep(random_range(0, tb)); // Driving to final stop
-  nice_print("BUS: arrived to final\n");
 
-  for (int i = 0; i < *riders; i++) {
+  nice_print("BUS: arrived to final RIDERS: %d\n", *riders);
+  for (int i = 1; i <= *riders; i++) {
+    nice_print("test1 %d\n", i);
     sem_post(final_stop);
+    nice_print("INCREMENTING FINAL STOP i:%d\n", i);
     sem_wait(get_of);
+    nice_print("test2 %d\n", i);
+    nice_print("next %d\n", i);
   }
   nice_print("BUS: leaving final\n");
 
-  if (*waiting > 0) {
-    process_bus(stops_count, tb, bus_cap);
+  if (*waiting > 0 || *coming > 0) {
+    process_bus(stops_count, tb, bus_cap, skier_count);
   }
 
   nice_print("BUS: finish\n");
@@ -230,7 +241,10 @@ void process_bus(int stops_count, int tb, int bus_cap) {
 
 void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
   nice_print("L %d: started\n", skier_id);
+
   usleep(random_range(0, tl)); // Breakfast
+  *coming -= 1;
+  printf("coming: %d\n", *coming);
 
   nice_print("L %d: arrived to %d\n", skier_id, stop_id);
   sem_wait(mutex_waiting);
@@ -242,11 +256,13 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
     sem_wait(bus);
     // Board
     if (*curr_stop == stop_id && *riders < bus_cap) {
+      sem_wait(mutex_riders);
       (*riders)++;
+      sem_post(mutex_riders);
       is_rider = true;
       nice_print("L %d: boarding\n", skier_id);
     } else {
-      sem_post(boarded);
+      sem_post(boarded); // TODO: Maybe remove?
 
       sem_wait(mutex_waiting);
       *waiting += 1;
@@ -256,15 +272,20 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
 
   sem_post(boarded);
 
+  nice_print("L %d: Waiting on final stop\n", skier_id);
   sem_wait(final_stop);
+  nice_print("L %d: At final stop!\n", skier_id);
 
+  nice_print("L %d: waiting for rider mutex!\n", skier_id);
   sem_wait(mutex_riders);
+  nice_print("L %d: can change mutex!\n", skier_id);
   (*riders)--;
   sem_post(mutex_riders);
 
   sem_post(get_of);
 
   nice_print("L %d: going to ski\n", skier_id);
+  exit(0);
 }
 
 int main(int argc, char *argv[]) {
@@ -332,23 +353,25 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // Random numbers
+  srand(getpid());
+
   printf("forkis\n");
   pid_t bus = fork();
   if (bus == 0) {
     // child
-    process_bus(stops_count, bus_ride_time, bus_capacity);
+    process_bus(stops_count, bus_ride_time, bus_capacity, skiers_count);
   } else if (bus < 0) {
     semaphore_clean();
     return 1;
   }
 
-  // TODO: Create L processess of skiers
-  srand(time(NULL));
-  for (int i = 1; i <= skiers_count; i++) {
+  // NOTE: Creatig skiers processes
+  (*coming) = skiers_count;
 
+  for (int i = 1; i <= skiers_count; i++) {
     printf("forkis skier %d\n", i);
     pid_t skier = fork();
-    srand(getpid());
     int stop_id = random_range(1, stops_count);
 
     if (skier == 0) {
