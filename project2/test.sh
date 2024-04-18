@@ -30,7 +30,7 @@ perform_test() {
 # Loop to perform the tests 1000 times
 for (( i=0; i<1000; i++ )); do
     # Generate random test parameters or use predefined ones
-    L=$((1 + $RANDOM % 20))
+    L=$((1 + $RANDOM % 50))
     Z=$((1 + $RANDOM % 5))
     K=$((10 + $RANDOM % 20))
     TL=$(($RANDOM % 1000))
@@ -38,6 +38,7 @@ for (( i=0; i<1000; i++ )); do
     expected_exit_code=0  # Expected exit code for normal execution, adjust if needed
 
     echo "Running test iteration $((i+1))..."
+    echo "Executing program with random numbers: L=$L, Z=$Z, K=$K, TL=$TL, TB=$TB"
     if perform_test $L $Z $K $TL $TB $expected_exit_code; then
         echo "Test $((i+1)): SUCCESS"
     else

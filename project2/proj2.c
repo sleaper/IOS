@@ -46,7 +46,7 @@ int *coming;
 
 // Semaphores
 sem_t *rider_mutex;
-sem_t *multiplex;
+sem_t *in_stop;
 sem_t *bus;
 sem_t *allBoard;
 sem_t *print;
@@ -55,6 +55,7 @@ sem_t *final_stop;
 sem_t *get_of;
 
 int semaphore_init(int skier_count, int multiplex_default, int stops_count) {
+  ((void)multiplex_default);
   sem_unlink(BUS_FNAME);
   sem_unlink(PRINT_FNAME);
   sem_unlink(BOARDED_FNAME);
@@ -76,8 +77,8 @@ int semaphore_init(int skier_count, int multiplex_default, int stops_count) {
     return 1;
   }
 
-  multiplex = sem_open(RIDERS_FNAME, O_CREAT, 0666, multiplex_default);
-  if (multiplex == SEM_FAILED) {
+  in_stop = sem_open(RIDERS_FNAME, O_CREAT, 0666, 0);
+  if (in_stop == SEM_FAILED) {
     perror("sem_open/multiplex");
     return 1;
   }
@@ -195,7 +196,7 @@ void semaphore_clean(int stop_count) {
 
   sem_close(bus);
   sem_close(print);
-  sem_close(multiplex);
+  sem_close(in_stop);
   sem_close(rider_mutex);
   sem_close(pass_mutex);
   sem_close(final_stop);
@@ -217,7 +218,7 @@ void semaphore_clean(int stop_count) {
   munmap(riders, sizeof(int));
   munmap(coming, sizeof(int));
   munmap(riders_at_stop, sizeof(int) * stop_count);
-  // printf("clean\n");
+  printf("clean\n");
 }
 
 void process_bus(int stops_count, int tb) {
@@ -228,15 +229,18 @@ again:
 
   while ((*curr_stop) <= stops_count) {
     usleep(random_range(0, tb));
+
     nice_print("BUS: arrived to %d\n", *curr_stop);
 
     // Let skiers board
     sem_wait(rider_mutex);
-    if (riders_at_stop[*curr_stop] > 0) {
+    int tmp = riders_at_stop[*curr_stop];
+    sem_post(rider_mutex);
+
+    if (tmp > 0) {
       sem_post(bus);
       sem_wait(allBoard);
     }
-    sem_post(rider_mutex);
 
     nice_print("BUS: leaving %d\n", *curr_stop);
     // Depart
@@ -281,8 +285,6 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
 
   usleep(random_range(0, tl));
 
-  sem_wait(multiplex);
-
   sem_wait(rider_mutex);
   riders_at_stop[stop_id] += 1;
   (*coming) -= 1;
@@ -291,25 +293,33 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
   nice_print("L %d: arrived to %d\n", skier_id, stop_id);
 
   // Waiting on BUS
+waiting_again:
   sem_wait(bus);
 
+  // BoardBUS()
   if (riders_at_stop[*curr_stop] > 0 && *passengers < bus_cap) {
-
-    sem_post(multiplex);
-
-    // BoardBUS()
-    sem_wait(pass_mutex);
-    (*passengers)++;
-    sem_post(pass_mutex);
 
     nice_print("L %d: boarding \n", skier_id);
 
+    sem_wait(pass_mutex);
+    sem_wait(rider_mutex);
+    (*passengers)++;
     riders_at_stop[*curr_stop] -= 1;
-    if (riders_at_stop[*curr_stop] == 0) {
+    sem_post(rider_mutex);
+    sem_post(pass_mutex);
+
+    sem_wait(rider_mutex);
+    int tmp = riders_at_stop[*curr_stop];
+    sem_post(rider_mutex);
+
+    if (tmp == 0) {
       sem_post(allBoard);
     } else {
       sem_post(bus);
     }
+  } else {
+    sem_post(allBoard);
+    goto waiting_again;
   }
 
   sem_wait(final_stop);
@@ -390,7 +400,6 @@ int main(int argc, char *argv[]) {
   // NOTE: Random numbers
   srand(getpid());
 
-  // printf("forkis\n");
   pid_t bus = fork();
   if (bus == 0) {
     // NOTE: child
@@ -402,7 +411,6 @@ int main(int argc, char *argv[]) {
 
   // NOTE: Creatig skiers processes
   for (int i = 1; i <= skiers_count; i++) {
-    // printf("forkis skier %d\n", i);
     pid_t skier = fork();
     int stop_id = random_range(1, stops_count);
 
