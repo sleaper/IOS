@@ -7,6 +7,7 @@
 #define BOARDED_FNAME "xspacpe00.ios.boarded"
 #define PRINT_FNAME "xspacpe00.ios.print"
 #define GETOF_FNAME "xspacpe00.ios.getoff"
+#define PASS_FNAME "xspacpe00.ios.passengers"
 #define FINAL_FNAME "xspacpe00.ios.final_stop"
 #define RIDERS_FNAME "xspacpe00.ios.riders"
 

@@ -36,43 +36,55 @@ int is_number(char *s) {
 FILE *oFile;
 
 // shared memory for data
-int *waiting;
-int *line;
-int *curr_stop;
 int *riders;
+int *line;
+
+int *passengers;
+int *curr_stop;
+int *riders_at_stop;
 int *coming;
 
 // Semaphores
-sem_t *mutex_waiting;
-sem_t *mutex_riders;
+sem_t *rider_mutex;
+sem_t *multiplex;
 sem_t *bus;
-sem_t *boarded;
+sem_t *allBoard;
 sem_t *print;
-sem_t *get_of;
+sem_t *pass_mutex;
 sem_t *final_stop;
+sem_t *get_of;
 
-int semaphore_init(void) {
+int semaphore_init(int skier_count, int multiplex_default, int stops_count) {
+  sem_unlink(BUS_FNAME);
+  sem_unlink(PRINT_FNAME);
+  sem_unlink(BOARDED_FNAME);
+  sem_unlink(MUTEX_FNAME);
+  sem_unlink(GETOF_FNAME);
+  sem_unlink(FINAL_FNAME);
+  sem_unlink(RIDERS_FNAME);
+  sem_unlink(PASS_FNAME);
+
   bus = sem_open(BUS_FNAME, O_CREAT, 0666, 0);
   if (bus == SEM_FAILED) {
     perror("sem_open/bus");
     return 1;
   }
 
-  mutex_waiting = sem_open(MUTEX_FNAME, O_CREAT, 0666, 1);
-  if (mutex_waiting == SEM_FAILED) {
-    perror("sem_open/mutex_waiting");
+  rider_mutex = sem_open(MUTEX_FNAME, O_CREAT, 0666, 1);
+  if (rider_mutex == SEM_FAILED) {
+    perror("sem_open/rider_mutex");
     return 1;
   }
 
-  mutex_riders = sem_open(RIDERS_FNAME, O_CREAT, 0666, 1);
-  if (mutex_riders == SEM_FAILED) {
-    perror("sem_open/mutex_riders");
+  multiplex = sem_open(RIDERS_FNAME, O_CREAT, 0666, multiplex_default);
+  if (multiplex == SEM_FAILED) {
+    perror("sem_open/multiplex");
     return 1;
   }
 
-  boarded = sem_open(BOARDED_FNAME, O_CREAT, 0666, 0);
-  if (boarded == SEM_FAILED) {
-    perror("sem_open/boarded");
+  allBoard = sem_open(BOARDED_FNAME, O_CREAT, 0666, 0);
+  if (allBoard == SEM_FAILED) {
+    perror("sem_open/allBoard");
     return 1;
   }
 
@@ -88,9 +100,15 @@ int semaphore_init(void) {
     return 1;
   }
 
+  pass_mutex = sem_open(PASS_FNAME, O_CREAT, 0666, 1);
+  if (pass_mutex == SEM_FAILED) {
+    perror("sem_open/pass_mutex");
+    return 1;
+  }
+
   get_of = sem_open(GETOF_FNAME, O_CREAT, 0666, 0);
-  if (get_of == SEM_FAILED) {
-    perror("sem_open/getof");
+  if (pass_mutex == SEM_FAILED) {
+    perror("sem_open/get_off");
     return 1;
   }
 
@@ -100,13 +118,13 @@ int semaphore_init(void) {
     return 1;
   }
 
-  waiting = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
-                 MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-  if (waiting == MAP_FAILED) {
-    perror("mmap/waiting");
+  passengers = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
+                    MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+  if (passengers == MAP_FAILED) {
+    perror("mmap/bus_cap");
     return 1;
   }
-  *waiting = 0;
+  *passengers = 0;
 
   line = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
               MAP_SHARED | MAP_ANONYMOUS, 0, 0);
@@ -132,13 +150,26 @@ int semaphore_init(void) {
   }
   *riders = 0;
 
+  // NOTE: I do not whant to recalculate the zero index all the time
+  riders_at_stop =
+      mmap(NULL, sizeof(int) * stops_count + 1, PROT_READ | PROT_WRITE,
+           MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+  if (riders_at_stop == MAP_FAILED) {
+    perror("mmap/riders_at_stop");
+    return 1;
+  }
+  for (int i = 1; i < stops_count; i++) {
+    riders[i] = 0;
+  }
+
   coming = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
                 MAP_SHARED | MAP_ANONYMOUS, 0, 0);
   if (coming == MAP_FAILED) {
     perror("mmap/comming");
     return 1;
   }
-  *coming = 0;
+  *coming = skier_count;
+  // printf("skier count: %d\n", skier_count);
 
   return 0;
 }
@@ -159,16 +190,17 @@ void nice_print(const char *format, ...) {
   sem_post(print);
 }
 
-void semaphore_clean(void) {
+void semaphore_clean(int stop_count) {
   fclose(oFile);
 
   sem_close(bus);
   sem_close(print);
-  sem_close(boarded);
-  sem_close(mutex_waiting);
-  sem_close(get_of);
+  sem_close(multiplex);
+  sem_close(rider_mutex);
+  sem_close(pass_mutex);
   sem_close(final_stop);
-  sem_close(mutex_riders);
+  sem_close(allBoard);
+  sem_close(get_of);
 
   sem_unlink(BUS_FNAME);
   sem_unlink(PRINT_FNAME);
@@ -177,57 +209,67 @@ void semaphore_clean(void) {
   sem_unlink(GETOF_FNAME);
   sem_unlink(FINAL_FNAME);
   sem_unlink(RIDERS_FNAME);
+  sem_unlink(PASS_FNAME);
 
-  munmap(waiting, sizeof(int));
+  munmap(passengers, sizeof(int));
   munmap(line, sizeof(int));
   munmap(curr_stop, sizeof(int));
   munmap(riders, sizeof(int));
   munmap(coming, sizeof(int));
+  munmap(riders_at_stop, sizeof(int) * stop_count);
+  // printf("clean\n");
 }
 
-void process_bus(int stops_count, int tb, int bus_cap, int skier_count) {
+void process_bus(int stops_count, int tb) {
   nice_print("BUS: started\n");
 
-  *curr_stop = 1;
+again:
+  (*curr_stop) = 1;
 
-  while (*curr_stop <= stops_count) {
-    usleep(random_range(0, tb)); // Driving to stop
+  while ((*curr_stop) <= stops_count) {
+    usleep(random_range(0, tb));
     nice_print("BUS: arrived to %d\n", *curr_stop);
 
     // Let skiers board
-    sem_wait(mutex_waiting);
-    int n = min(*waiting, bus_cap);
-
-    for (int i = 0; i < n; i++) {
+    sem_wait(rider_mutex);
+    if (riders_at_stop[*curr_stop] > 0) {
       sem_post(bus);
-      sem_wait(boarded);
+      sem_wait(allBoard);
     }
-
-    *waiting = max(*waiting - bus_cap, 0);
-    sem_post(mutex_waiting);
+    sem_post(rider_mutex);
 
     nice_print("BUS: leaving %d\n", *curr_stop);
-
-    // Depart to the next stop
+    // Depart
     (*curr_stop)++;
   }
 
   usleep(random_range(0, tb));
 
-  sem_wait(mutex_riders);
-  int tmp = *riders;
-  sem_post(mutex_riders);
-
   nice_print("BUS: arrived to final\n");
-  for (int i = 1; i <= tmp; i++) {
+
+  sem_wait(pass_mutex);
+  int tmp = *passengers;
+  sem_post(pass_mutex);
+
+  for (int i = 0; i < tmp; i++) {
     sem_post(final_stop);
     sem_wait(get_of);
   }
+
   nice_print("BUS: leaving final\n");
 
-  if (*waiting > 0 || *coming > 0) {
+  bool still_waiting = false;
+  for (int i = 1; i < stops_count + 1; i++) {
+    sem_wait(rider_mutex);
+    if (riders_at_stop[i] > 0) {
+      still_waiting = true;
+    }
+    sem_post(rider_mutex);
+  }
+
+  if (still_waiting || *coming > 0) {
     // If there are still waiting skiers or coming skiers, restart the bus loop
-    process_bus(stops_count, tb, bus_cap, skier_count);
+    goto again;
   } else {
     nice_print("BUS: finish\n");
     exit(0);
@@ -237,45 +279,47 @@ void process_bus(int stops_count, int tb, int bus_cap, int skier_count) {
 void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
   nice_print("L %d: started\n", skier_id);
 
-  usleep(random_range(0, tl)); // Breakfast
-  *coming -= 1;
+  usleep(random_range(0, tl));
+
+  sem_wait(multiplex);
+
+  sem_wait(rider_mutex);
+  riders_at_stop[stop_id] += 1;
+  (*coming) -= 1;
+  sem_post(rider_mutex);
 
   nice_print("L %d: arrived to %d\n", skier_id, stop_id);
-  sem_wait(mutex_waiting);
-  *waiting += 1;
-  sem_post(mutex_waiting);
 
-  bool has_boarded = false;
-  while (!has_boarded) {
-    sem_wait(bus);
+  // Waiting on BUS
+  sem_wait(bus);
 
-    // Check if the skier is at the correct stop and the bus is not full
-    sem_wait(mutex_riders);
-    if (*curr_stop == stop_id && *riders < bus_cap) {
-      nice_print("L %d: boarding\n", skier_id);
-      (*riders)++;
-      has_boarded = true;
-    }
-    sem_post(mutex_riders);
+  if (riders_at_stop[*curr_stop] > 0 && *passengers < bus_cap) {
 
-    sem_post(boarded);
+    sem_post(multiplex);
 
-    if (!has_boarded) {
-      sem_wait(mutex_waiting);
-      (*waiting)++;
-      sem_post(mutex_waiting);
+    // BoardBUS()
+    sem_wait(pass_mutex);
+    (*passengers)++;
+    sem_post(pass_mutex);
+
+    nice_print("L %d: boarding \n", skier_id);
+
+    riders_at_stop[*curr_stop] -= 1;
+    if (riders_at_stop[*curr_stop] == 0) {
+      sem_post(allBoard);
+    } else {
+      sem_post(bus);
     }
   }
 
   sem_wait(final_stop);
-
-  sem_wait(mutex_riders);
-  (*riders)--;
-  sem_post(mutex_riders);
-
+  sem_wait(pass_mutex);
+  (*passengers)--;
+  sem_post(pass_mutex);
   sem_post(get_of);
 
   nice_print("L %d: going to ski\n", skier_id);
+
   exit(0);
 }
 
@@ -338,29 +382,27 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if (semaphore_init() == 1) {
-    semaphore_clean();
+  if (semaphore_init(skiers_count, bus_capacity, stops_count) == 1) {
+    semaphore_clean(stops_count);
     return 1;
   }
 
   // NOTE: Random numbers
   srand(getpid());
 
-  printf("forkis\n");
+  // printf("forkis\n");
   pid_t bus = fork();
   if (bus == 0) {
     // NOTE: child
-    process_bus(stops_count, bus_ride_time, bus_capacity, skiers_count);
+    process_bus(stops_count, bus_ride_time);
   } else if (bus < 0) {
-    semaphore_clean();
+    semaphore_clean(stops_count);
     return 1;
   }
 
   // NOTE: Creatig skiers processes
-  (*coming) = skiers_count;
-
   for (int i = 1; i <= skiers_count; i++) {
-    printf("forkis skier %d\n", i);
+    // printf("forkis skier %d\n", i);
     pid_t skier = fork();
     int stop_id = random_range(1, stops_count);
 
@@ -368,7 +410,7 @@ int main(int argc, char *argv[]) {
       // NOTE: child
       process_skier(i, stop_id, skier_wait_time, bus_capacity);
     } else if (skier < 0) {
-      semaphore_clean();
+      semaphore_clean(stops_count);
       return 1;
     }
   }
@@ -376,7 +418,7 @@ int main(int argc, char *argv[]) {
   while (wait(NULL) > 0)
     ;
 
-  semaphore_clean();
+  semaphore_clean(stops_count);
 
   return 0;
 }
