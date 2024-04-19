@@ -1,21 +1,36 @@
 CC=gcc
-# TODO: Remove -g ?
-CFLAGS=-g -std=gnu99 -Wall -Wextra -Werror -pedantic
+CFLAGS=-std=gnu99 -Wall -Wextra -Werror -pedantic
 LDFLAGS=-pthread
 
-.PHONY=zip clean
+.PHONY=zip clean clean all
 
-proj2: proj2.o
+source_files = memory.c processes.c semaphores.c util.c proj2.c
+obj_files = $(source_files:.c=.o)
+
+all: proj2
+
+proj2: $(obj_files)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-proj2.o: proj2.c proj2.h
+proj2.o: proj2.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+memory.o: memory.c memory.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+processes.o: processes.c processes.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+semaphores.o: semaphores.c semaphores.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+util.o: util.c util.h
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clear: clean
 
 clean:
-	rm -f *.o *.out proj2 xspacpe00.zip
+	rm -f *.o proj2 xspacpe00.zip
 
 zip:
-	zip xspacpe00.zip *.c *.h makefile
+	zip xspacpe00.zip *.c *.h Makefile
