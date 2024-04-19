@@ -12,6 +12,11 @@ int main(int argc, char *argv[]) {
   int skier_wait_time = 0;
   int bus_ride_time = 0;
 
+  if (argc != 6) {
+    fprintf(stderr, "Invalid args count: %d instead of %d\n", argc - 1, 5);
+    return 1;
+  }
+
   for (int i = 1; i < argc; i++) {
     int arg = is_number(argv[i]);
     if (arg == -1) {
@@ -23,7 +28,7 @@ int main(int argc, char *argv[]) {
     case 1:
       if (arg <= 0 || arg >= 20000) {
         fprintf(stderr, "Invalid skiers count\n");
-        exit(1);
+        return 1;
       }
 
       skiers_count = arg;

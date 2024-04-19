@@ -30,7 +30,7 @@ util.o: util.c util.h
 clear: clean
 
 clean:
-	rm -f *.o proj2 xspacpe00.zip
+	rm -f *.o proj2 *.zip
 
 zip:
-	zip xspacpe00.zip *.c *.h Makefile
+	zip proj2.zip *.c *.h Makefile
