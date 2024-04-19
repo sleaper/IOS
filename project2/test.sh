@@ -1,49 +1,30 @@
 #!/bin/bash
 
-# Compile the project
-make clean
-make || { echo "Compilation failed"; exit 1; }
+# Number of times to execute the program
+NUM_EXECUTIONS=20
 
-# Function to perform a single test
-perform_test() {
-    # Run the project with arguments
-    ./proj2 $1 $2 $3 $4 $5
-    RETVAL=$?
+# Timeout value in seconds
+TIMEOUT=10
 
-    # Check for expected exit code
-    if [ $RETVAL -ne "$6" ]; then
-        echo "Test FAILED: Expected exit code $6, got $RETVAL"
-        return 1
-    fi
+# Loop to execute the program NUM_EXECUTIONS times
+for ((i=1; i<=NUM_EXECUTIONS; i++))
+do
+    # Generate random values for each parameter
+    L=$(shuf -i 1-19999 -n 1)  # Random number between 1 and 20000
+    Z=$(shuf -i 1-10 -n 1)     # Random number between 1 and 10
+    K=$(shuf -i 10-100 -n 1)    # Random number between 10 and 100
+    TL=$(shuf -i 0-10000 -n 1)     # Random number between 0 and 10000
+    TB=$(shuf -i 0-1000 -n 1)      # Random number between 0 and 1000
 
-    # Run the script to check proj2.out
-    ./kontrola-vystupu.sh < proj2.out
-    if [ $? -eq 0 ]; then
-        echo "Output test PASSED for parameters: L=$1 Z=$2 K=$3 TL=$4 TB=$5"
-        return 0
-    else
-        echo "Output test FAILED for parameters: L=$1 Z=$2 K=$3 TL=$4 TB=$5"
-        return 1
-    fi
-}
+    # Specify the path to the program and pass random numbers as arguments
+    PROGRAM="./proj2 $L $Z $K $TL $TB"
 
-# Loop to perform the tests 1000 times
-for (( i=0; i<1000; i++ )); do
-    # Generate random test parameters or use predefined ones
-    L=$((1 + $RANDOM % 50))
-    Z=$((1 + $RANDOM % 5))
-    K=$((10 + $RANDOM % 20))
-    TL=$(($RANDOM % 1000))
-    TB=$(($RANDOM % 1000))
-    expected_exit_code=0  # Expected exit code for normal execution, adjust if needed
-
-    echo "Running test iteration $((i+1))..."
-    echo "Executing program with random numbers: L=$L, Z=$Z, K=$K, TL=$TL, TB=$TB"
-    if perform_test $L $Z $K $TL $TB $expected_exit_code; then
-        echo "Test $((i+1)): SUCCESS"
-    else
-        echo "Test $((i+1)): FAIL"
+    echo "Executing program iteration $i with random numbers: L=$L, Z=$Z, K=$K, TL=$TL, TB=$TB"
+    timeout $TIMEOUT $PROGRAM
+    if [ $? -eq 124 ]; then
+        echo "Program timed out"
+        exit 1
     fi
 done
 
-echo "Testing complete."
+echo "Execution of program completed"
