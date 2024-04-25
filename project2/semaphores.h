@@ -11,16 +11,19 @@
 #define PASS_FNAME "xspacpe00.ios.passengers"
 #define FINAL_FNAME "xspacpe00.ios.final_stop"
 #define STOP_FNAME "xspacpe00.ios.stop"
+#define BLOCKED_FNAME "xspacpe00.ios.blocked"
 
 // Semaphores
 extern sem_t *riders_mutex;
 extern sem_t *stop_mutex;
 extern sem_t *bus;
+extern sem_t *blocked_mutex;
 extern sem_t *allBoard;
 extern sem_t *print;
 extern sem_t *pass_mutex;
 extern sem_t *final_stop;
 extern sem_t *get_of;
+// extern sem_t *stop_semaphores;
 
 int semaphore_init(int skier_count, int stops_count);
 void semaphore_clean(int stops_count);

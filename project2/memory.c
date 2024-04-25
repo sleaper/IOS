@@ -10,6 +10,7 @@ int *passengers;
 int *curr_stop;
 int *riders_at_stop;
 int *coming;
+int *blocked;
 
 int initialize_shared_memory(int skier_count, int stops_count) {
   oFile = fopen("proj2.out", "w");
@@ -25,6 +26,14 @@ int initialize_shared_memory(int skier_count, int stops_count) {
     return 1;
   }
   *passengers = 0;
+
+  blocked = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
+                 MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+  if (blocked == MAP_FAILED) {
+    perror("mmap/blocked");
+    return 1;
+  }
+  *blocked = 0;
 
   line = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
               MAP_SHARED | MAP_ANONYMOUS, 0, 0);
@@ -70,5 +79,6 @@ void cleanup_shared_memory(int stops_count) {
   munmap(line, sizeof(int));
   munmap(curr_stop, sizeof(int));
   munmap(coming, sizeof(int));
+  munmap(blocked, sizeof(int));
   munmap(riders_at_stop, sizeof(int) * stops_count);
 }

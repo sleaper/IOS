@@ -3,14 +3,6 @@
 
 #include <stdlib.h>
 
-#ifdef DEBUG
-#define DEBUG_PRINT(x) printf x
-#else
-#define DEBUG_PRINT(x)                                                         \
-  do {                                                                         \
-  } while (0)
-#endif
-
 inline unsigned int random_range(int min, int max) {
   return rand() % (max + 1 - min) + min;
 }

@@ -1,6 +1,5 @@
 #include "semaphores.h"
 #include "memory.h"
-#include "util.h"
 #include <fcntl.h>
 #include <semaphore.h>
 #include <stdio.h>
@@ -16,11 +15,14 @@ sem_t *print;
 sem_t *pass_mutex;
 sem_t *final_stop;
 sem_t *get_of;
+sem_t *blocked_mutex;
+// sem_t *stop_semaphores;
 
 int semaphore_init(int skier_count, int stops_count) {
   initialize_shared_memory(skier_count, stops_count);
 
   sem_unlink(BUS_FNAME);
+  sem_unlink(BLOCKED_FNAME);
   sem_unlink(PRINT_FNAME);
   sem_unlink(BOARDED_FNAME);
   sem_unlink(RIDERS_FNAME);
@@ -35,13 +37,19 @@ int semaphore_init(int skier_count, int stops_count) {
     return 1;
   }
 
+  blocked_mutex = sem_open(BLOCKED_FNAME, O_CREAT, 0666, 1);
+  if (blocked_mutex == SEM_FAILED) {
+    perror("sem_open/blocked_mutex");
+    return 1;
+  }
+
   riders_mutex = sem_open(RIDERS_FNAME, O_CREAT, 0666, 1);
   if (riders_mutex == SEM_FAILED) {
     perror("sem_open/rider_mutex");
     return 1;
   }
 
-  stop_mutex = sem_open(STOP_FNAME, O_CREAT, 0666, 1);
+  stop_mutex = sem_open(STOP_FNAME, O_CREAT, 0666, 0);
   if (stop_mutex == SEM_FAILED) {
     perror("sem_open/multiplex");
     return 1;
@@ -85,6 +93,7 @@ void semaphore_clean(int stops_count) {
   cleanup_shared_memory(stops_count);
 
   sem_close(bus);
+  sem_close(blocked_mutex);
   sem_close(print);
   sem_close(stop_mutex);
   sem_close(riders_mutex);
@@ -94,6 +103,7 @@ void semaphore_clean(int stops_count) {
   sem_close(get_of);
 
   sem_unlink(BUS_FNAME);
+  sem_unlink(BLOCKED_FNAME);
   sem_unlink(PRINT_FNAME);
   sem_unlink(BOARDED_FNAME);
   sem_unlink(RIDERS_FNAME);
@@ -107,5 +117,4 @@ void semaphore_clean(int stops_count) {
   munmap(curr_stop, sizeof(int));
   munmap(coming, sizeof(int));
   munmap(riders_at_stop, sizeof(int) * stops_count);
-  DEBUG_PRINT("clean\n");
 }
