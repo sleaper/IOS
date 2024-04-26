@@ -1,6 +1,6 @@
 #!/bin/bash
 #NesnupejteDrozdi
-L=100
+L=150
 Z=10
 K=10
 TL=4

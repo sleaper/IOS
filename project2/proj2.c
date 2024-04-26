@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
   pid_t bus = fork();
   if (bus == 0) {
     // NOTE: child
-    process_bus(stops_count, bus_ride_time);
+    process_bus(stops_count, bus_ride_time, bus_capacity);
   } else if (bus < 0) {
     semaphore_clean(stops_count);
     return 1;
@@ -106,6 +106,5 @@ int main(int argc, char *argv[]) {
 
   semaphore_clean(stops_count);
 
-  DEBUG_PRINT("exiting main\n");
   return 0;
 }

@@ -1,3 +1,4 @@
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -11,11 +12,44 @@ int *curr_stop;
 int *riders_at_stop;
 int *coming;
 int *blocked;
+int *riders_blocked_count;
+sem_t *stop_semaphores;
+sem_t *stop_access_mutex;
+
+void cleanup_shared_memory(int stops_count) {
+  munmap(passengers, sizeof(int));
+  munmap(line, sizeof(int));
+  munmap(curr_stop, sizeof(int));
+  munmap(coming, sizeof(int));
+  munmap(blocked, sizeof(int));
+  munmap(riders_blocked_count, sizeof(int));
+  munmap(riders_at_stop, sizeof(int) * stops_count);
+  munmap(stop_semaphores, sizeof(sem_t) * stops_count);
+  munmap(stop_access_mutex, sizeof(sem_t) * stops_count);
+}
 
 int initialize_shared_memory(int skier_count, int stops_count) {
+  cleanup_shared_memory(stops_count);
+
   oFile = fopen("proj2.out", "w");
   if (oFile == NULL) {
     fprintf(stderr, "File open failed\n");
+    return 1;
+  }
+
+  stop_semaphores =
+      mmap(NULL, sizeof(sem_t) * stops_count, PROT_READ | PROT_WRITE,
+           MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+  if (stop_semaphores == MAP_FAILED) {
+    perror("mmap/stop_semaphores");
+    return 1;
+  }
+
+  stop_access_mutex =
+      mmap(NULL, sizeof(sem_t) * stops_count, PROT_READ | PROT_WRITE,
+           MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+  if (stop_access_mutex == MAP_FAILED) {
+    perror("mmap/stop_access_mutex");
     return 1;
   }
 
@@ -34,6 +68,14 @@ int initialize_shared_memory(int skier_count, int stops_count) {
     return 1;
   }
   *blocked = 0;
+
+  riders_blocked_count = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
+                              MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+  if (riders_blocked_count == MAP_FAILED) {
+    perror("mmap/riders_blocked_count");
+    return 1;
+  }
+  *riders_blocked_count = 0;
 
   line = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE,
               MAP_SHARED | MAP_ANONYMOUS, 0, 0);
@@ -72,13 +114,4 @@ int initialize_shared_memory(int skier_count, int stops_count) {
   *coming = skier_count;
 
   return 0;
-}
-
-void cleanup_shared_memory(int stops_count) {
-  munmap(passengers, sizeof(int));
-  munmap(line, sizeof(int));
-  munmap(curr_stop, sizeof(int));
-  munmap(coming, sizeof(int));
-  munmap(blocked, sizeof(int));
-  munmap(riders_at_stop, sizeof(int) * stops_count);
 }
