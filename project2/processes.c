@@ -6,8 +6,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-void process_bus(int stops_count, int tb, int bus_cap) {
-  (void)bus_cap;
+void process_bus(int stops_count, int tb) {
   nice_print("BUS: started\n");
 
   while (true) {
@@ -16,8 +15,8 @@ void process_bus(int stops_count, int tb, int bus_cap) {
     while ((*curr_stop) <= stops_count) {
       usleep(random_range(0, tb));
 
-      nice_print("BUS: BLOCK STOP %d\n", *curr_stop);
       sem_wait(blocked_mutex);
+      // Noone can arrive to curr stop
       (*blocked) = 1;
       sem_post(blocked_mutex);
 
@@ -30,9 +29,7 @@ void process_bus(int stops_count, int tb, int bus_cap) {
 
       if (tmp_riders > 0) {
         for (int i = 0; i < tmp_riders; i++) {
-          nice_print("BUS: post at %d\n", *curr_stop - 1);
           sem_post(&stop_semaphores[*curr_stop - 1]);
-          nice_print("BUS: waiting\n");
           sem_wait(allBoard);
         }
       }
@@ -44,6 +41,7 @@ void process_bus(int stops_count, int tb, int bus_cap) {
       int tmp = (*riders_blocked_count);
       sem_post(blocked_mutex);
 
+      // Unblock skiers
       for (int i = 0; i < tmp; i++) {
         sem_post(&stop_access_mutex[*curr_stop - 1]);
       }
@@ -61,11 +59,8 @@ void process_bus(int stops_count, int tb, int bus_cap) {
     sem_post(pass_mutex);
 
     for (int i = 0; i < tmp; i++) {
-      nice_print("BUS: go\n");
       sem_post(final_stop);
-      nice_print("BUS: waiting on get of\n");
       sem_wait(get_of);
-      nice_print("BUS: another round\n");
     }
 
     nice_print("BUS: leaving final\n");
@@ -94,7 +89,6 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
 
   usleep(random_range(0, tl));
 
-  nice_print("L %d: stop unblock %d\n", skier_id, stop_id);
   sem_wait(blocked_mutex);
   int pepa = *blocked;
   sem_post(blocked_mutex);
@@ -113,10 +107,8 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
   // Waiting on BUS
   while (true) {
     sem_wait(&stop_semaphores[stop_id - 1]);
-    nice_print("L %d: goging inside\n", skier_id);
 
     if (*curr_stop != stop_id) {
-      nice_print("L %d: huh my: %d, curr: %d\n", skier_id, stop_id, *curr_stop);
       continue;
     }
 
@@ -126,8 +118,6 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
     }
 
     // BoardBUS()
-    nice_print("L %d: passengers: %d, buscap: %d\n", skier_id, *passengers,
-               bus_cap);
     if (*passengers < bus_cap) {
       nice_print("L %d: boarding\n", skier_id);
 
@@ -142,7 +132,6 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
 
       break;
     } else {
-      nice_print("L %d: BUS CAN GO\n", skier_id);
       sem_post(allBoard);
     }
   }
@@ -151,6 +140,7 @@ void process_skier(int skier_id, int stop_id, int tl, int bus_cap) {
   sem_wait(pass_mutex);
   (*passengers)--;
   sem_post(pass_mutex);
+  nice_print("L %d: going to ski\n", skier_id);
   sem_post(get_of);
 
   exit(0);

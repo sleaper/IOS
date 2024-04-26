@@ -8,7 +8,6 @@
 #include <sys/wait.h>
 
 sem_t *riders_mutex;
-sem_t *bus;
 sem_t *allBoard;
 sem_t *print;
 sem_t *pass_mutex;
@@ -19,7 +18,6 @@ sem_t *blocked_mutex;
 int semaphore_init(int skier_count, int stops_count) {
   initialize_shared_memory(skier_count, stops_count);
 
-  sem_unlink(BUS_FNAME);
   sem_unlink(BLOCKED_FNAME);
   sem_unlink(PRINT_FNAME);
   sem_unlink(BOARDED_FNAME);
@@ -48,12 +46,6 @@ int semaphore_init(int skier_count, int stops_count) {
       perror("sem_open/stop_access_mutex");
       return 1;
     }
-  }
-
-  bus = sem_open(BUS_FNAME, O_CREAT, 0666, 1);
-  if (bus == SEM_FAILED) {
-    perror("sem_open/bus");
-    return 1;
   }
 
   blocked_mutex = sem_open(BLOCKED_FNAME, O_CREAT, 0666, 1);
@@ -105,7 +97,6 @@ void semaphore_clean(int stops_count) {
   fclose(oFile);
   cleanup_shared_memory(stops_count);
 
-  sem_close(bus);
   sem_close(blocked_mutex);
   sem_close(print);
   sem_close(riders_mutex);
@@ -114,7 +105,6 @@ void semaphore_clean(int stops_count) {
   sem_close(allBoard);
   sem_close(get_of);
 
-  sem_unlink(BUS_FNAME);
   sem_unlink(BLOCKED_FNAME);
   sem_unlink(PRINT_FNAME);
   sem_unlink(BOARDED_FNAME);

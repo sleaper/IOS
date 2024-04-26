@@ -3,7 +3,6 @@
 
 #include <semaphore.h>
 
-#define BUS_FNAME "xspacpe00.ios.bus"
 #define RIDERS_FNAME "xspacpe00.ios.riders"
 #define BOARDED_FNAME "xspacpe00.ios.boarded"
 #define PRINT_FNAME "xspacpe00.ios.print"
@@ -14,7 +13,6 @@
 
 // Semaphores
 extern sem_t *riders_mutex;
-extern sem_t *bus;
 extern sem_t *blocked_mutex;
 extern sem_t *allBoard;
 extern sem_t *print;

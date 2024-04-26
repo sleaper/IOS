@@ -1,10 +1,10 @@
 #!/bin/bash
 #NesnupejteDrozdi
-L=150
+L=200
 Z=10
-K=10
-TL=4
-TB=5
+K=50
+TL=100
+TB=100
 
 #eval "./proj2 ${L} ${Z} ${K} ${TL} ${TB} > /dev/null"
 ./proj2 ${L} ${Z} ${K} ${TL} ${TB}
